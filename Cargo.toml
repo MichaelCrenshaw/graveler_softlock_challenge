@@ -1,0 +1,29 @@
+[package]
+name = "graveler_softlock_challenge"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Hopefully a dependency isn't cheating, for context; most low-level languages attempt to keep their standard library as small as possible.
+# Many of them (rust included) actually even have deliberate build flags which completely remove the standard library.
+# In short, Rust has no built-in random generation support. And I didn't want to make one by hand,
+# because then I could quite easily cheat by accident and cause an extremely fast short-circut with bad randomness generation.
+fastrand = "2.1.1"
+# Here for QOL, actually slows down the sim
+indicatif = "0.17.8"
+num_cpus = "1.16.0"
+
+# todo: consider profile guided optimization? https://doc.rust-lang.org/rustc/profile-guided-optimization.html
+[profile.release]
+opt-level = 3
+lto = "fat"
+panic = "abort"
+# todo: heavily reconsider this lol
+codegen-units = 1
+
+[profile.dev.build-override]
+opt-level = 3
+# todo: heavily reconsider this lol
+codegen-units = 1
+
+
