@@ -1,20 +1,25 @@
-use std::cell::SyncUnsafeCell;
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::pin::Pin;
+use std::sync::Arc;
 use fastrand;
+use std::sync::mpsc::channel;
 use crate::analytics::{ReportHandler, Reporter};
 use std::thread;
+use std::time::Duration;
 use num_cpus;
 use crate::ITERATION_COUNT;
 
+
+/// Runs in roughly one minute (On my cpu, while running other programs)
+/// ```
+/// Highest Ones Roll: 99
+/// Number of Roll Sessions: 1000000000
+/// Time elapsed: 58.6822327s
+/// ```
 pub fn naive_optimized_main() {
-
-    let mut report_handler = ReportHandler::new(ITERATION_COUNT);
-
     let logical_cores = num_cpus::get();
-    let processors = logical_cores.checked_sub(2).unwrap_or(1usize);
-    println!("cores: {logical_cores} \n procs: {processors}");
+    let processors = logical_cores.checked_sub(1).unwrap_or(1usize);
 
+    let mut report_handler = ReportHandler::new(ITERATION_COUNT, processors);
 
     // split the jobs
     let cycles_per_core = ITERATION_COUNT / logical_cores;
@@ -32,26 +37,28 @@ pub fn naive_optimized_main() {
     }
 
     // Reporting thread
-    let mut stop_reports = false;
+    let (sender, receiver) = channel();
     let reporting_handle = thread::spawn(move || {
         loop {
+            // See if there is a new message, otherwise loop
+            if let Ok(_) = receiver.recv_timeout(Duration::from_millis(100)) {
+                report_handler.close();
+                break
+            }
+
             report_handler.refresh();
         }
     });
 
     handles.into_iter().for_each(|x| { x.join().unwrap(); });
-    stop_reports = true;
+    sender.send(()).unwrap();
     reporting_handle.join().unwrap();
 }
 
-pub fn run_simulations(desired_iterations: usize, reporter: Reporter) {
-    let mut iteration_guard: MutexGuard<usize> = reporter.write_current_iterations();
-    let mut most_ones_guard: MutexGuard<usize> = reporter.write_high_score();
-    let mut wins_guard: MutexGuard<u8> = reporter.write_wins();
-
-    let iteration_reporter: &mut usize = iteration_guard.deref_mut();
-    let most_ones_reporter: &mut usize = most_ones_guard.deref_mut();
-    let wins_reporter: &mut u8 = wins_guard.deref_mut();
+pub fn run_simulations(desired_iterations: usize, reporter: Pin<Arc<Reporter>>) {
+    let iteration_reporter: &mut usize = reporter.write_current_iterations();
+    let most_ones_reporter: &mut usize = reporter.write_high_score();
+    let wins_reporter: &mut u8 = reporter.write_wins();
 
     let mut local_iteration = 0usize;
     let mut local_most_ones = 0usize;
@@ -73,10 +80,14 @@ pub fn run_simulations(desired_iterations: usize, reporter: Reporter) {
         local_iteration += 1;
 
         // Hoping for some excellent loop unraveling here
-        if local_iteration % 1000 == 0 {
+        if local_iteration % 100_000 == 0 {
             *iteration_reporter = local_iteration;
             *most_ones_reporter = local_most_ones;
             *wins_reporter = local_wins;
         }
     }
+
+    *iteration_reporter = local_iteration;
+    *most_ones_reporter = local_most_ones;
+    *wins_reporter = local_wins;
 }

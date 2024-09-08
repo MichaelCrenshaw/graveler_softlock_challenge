@@ -1,24 +1,21 @@
-use std::cell::{Cell, SyncUnsafeCell, UnsafeCell};
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::SystemTime;
-use std::{mem, ptr};
+use std::ptr;
 use std::ops::{Deref, DerefMut};
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct ReportHandler {
     start_time: SystemTime,
     progress_bar: ProgressBar,
-    reporters: Vec<SyncUnsafeCell<Reporter>>
+    reporters: Vec<Pin<Arc<Reporter>>>
 }
 
 impl ReportHandler {
-    pub fn new(desired_iterations: usize) -> Self {
+    pub fn new(desired_iterations: usize, planned_cycles: usize) -> Self {
         let bar = ProgressBar::new(desired_iterations as u64);
-        bar.disable_steady_tick();
-        // bar.abandon();
         bar.set_style(ProgressStyle::with_template(
-            "[{elapsed}] {bar:40.green/blue} {pos}/{len} | remaining: (~{eta})"
+            "[{elapsed_precise}] {bar:40.green/blue} {pos}/{len} | remaining: (~{eta})\n {msg}"
         ).unwrap());
 
         ReportHandler {
@@ -28,21 +25,23 @@ impl ReportHandler {
         }
     }
 
-    pub fn add_reporter(&mut self, desired_iterations: usize) -> Reporter {
-        self.reporters.push(SyncUnsafeCell::new(Reporter::new(desired_iterations)));
-        unsafe { self.reporters.get(0).unwrap().get().read() }
+    pub fn add_reporter(&mut self, desired_iterations: usize) -> Pin<Arc<Reporter>> {
+        self.reporters.push(Pin::new(Arc::new(Reporter::new(desired_iterations))));
+        let len = self.reporters.len();
+        unsafe { self.reporters.get_unchecked(len - 1).clone() }
     }
 
     pub fn refresh(&mut self) {
-        let reporters = self.reporters.iter().map(|x| unsafe { x.get().as_ref_unchecked() }).collect::<Vec<&Reporter>>();
-        let new_position = reporters.iter().map(|x| { x.read_current_iterations() }).fold(0usize, |acc, x| {acc + x});
-        let new_high_score = reporters.iter().map(|x| { x.read_high_score() }).fold(0usize, |acc, x| {usize::max(acc, x)});
-        let new_wins = reporters.iter().map(|x| { x.read_wins() }).fold(0u8, |acc, x| {acc + x});
+        let new_position = self.reporters.iter().map(|x| { x.read_current_iterations() }).fold(0usize, |acc, x| {acc + x});
+        let new_high_score = self.reporters.iter().map(|x| { x.read_high_score() }).fold(0usize, |acc, x| { usize::max(acc, x) });
+        let new_wins = self.reporters.iter().map(|x| { x.read_wins() }).fold(0u8, |acc, x| {acc + x});
 
-        // self.progress_bar.
-
+        self.progress_bar.set_message(format!("Current high score: {new_high_score} | Current wins: {new_wins}"));
         self.progress_bar.set_position(new_position as u64);
-        self.progress_bar.tick();
+    }
+
+    pub fn close(&mut self) {
+        self.progress_bar.finish()
     }
 }
 
@@ -75,15 +74,15 @@ impl Reporter {
         self.wins.read()
     }
 
-    pub fn write_current_iterations(&self) -> MutexGuard<'_, usize> {
+    pub fn write_current_iterations(&self) -> &mut usize {
         self.current_iterations.write()
     }
 
-    pub fn write_high_score(&self) -> MutexGuard<'_, usize> {
+    pub fn write_high_score(&self) -> &mut usize {
         self.high_score.write()
     }
 
-    pub fn write_wins(&self) -> MutexGuard<'_, u8> {
+    pub fn write_wins(&self) -> &mut u8 {
         self.wins.write()
     }
 }
@@ -96,8 +95,8 @@ impl <T: Sized + Send + Unpin> RWWSafe for T {}
 struct ReadWhileWriting<T>
 where T: RWWSafe
 {
-    value: Pin<Box<SyncUnsafeCell<Mutex<T>>>>,
-    reading_pointer: *const T
+    value: Pin<Box<T>>,
+    pointer: Option<*mut T>
 }
 
 // This pointer is safe to send and sync ONLY because the user accepts that race conditions are an approved "feature" for reads, writes will still be safely guarded.
@@ -110,23 +109,24 @@ where T: RWWSafe
 {
     fn new(value: T) -> Self {
         let mut selv = Self {
-            value: Pin::new(Box::new(SyncUnsafeCell::new(Mutex::new(value)))),
-            reading_pointer: ptr::null(),
+            value: Pin::new(Box::new(value)),
+            pointer: None,
         };
-        selv.reading_pointer = ptr::addr_of!(*selv.value.get_mut().lock().unwrap().deref());
+        selv.pointer = Option::Some(ptr::addr_of_mut!(*selv.value));
         selv
     }
 
-    fn write(&self) -> MutexGuard<T> {
-        unsafe { self.value.as_ref().get().as_mut_unchecked().lock().unwrap() }
+    fn write(&self) -> &mut T {
+        // Yeah, completely screw safety now lol
+        unsafe { self.pointer.unwrap().as_mut_unchecked() }
     }
 
     fn read_ref(&self) -> &T {
-        unsafe { self.reading_pointer.as_ref_unchecked() }
+        unsafe { self.pointer.unwrap().as_ref_unchecked() }
     }
 
     fn read(&self) -> T {
-        unsafe { self.reading_pointer.read() }
+        unsafe { self.pointer.unwrap().read() }
     }
 }
 
@@ -146,8 +146,8 @@ impl <T: RWWSafe> Deref for ReadWhileWriting<T> {
     }
 }
 
-// impl <T: RWWSafe> DerefMut for ReadWhileWriting<T> {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut *self.write()
-//     }
-// }
+impl <T: RWWSafe> DerefMut for ReadWhileWriting<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.write()
+    }
+}

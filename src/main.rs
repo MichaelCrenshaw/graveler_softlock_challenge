@@ -1,6 +1,9 @@
+#![feature(async_closure)]
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_ref_unchecked)]
+extern crate core;
 
+use std::error::Error;
 use crate::naive::naive_main;
 
 use std::time::{Duration, SystemTime};
@@ -14,17 +17,10 @@ mod naive_optimized;
 // Hyper-params (would be passed through args if I weren't lazy (also constants let the compiler do magic sometimes shh))
 const ITERATION_COUNT: usize = 1_000_000_000;
 
+// The performance is given in each file, as well as in comments below. But all numbers are based on my machine, with the following specs:
+// Processor    :	AMD Ryzen 5 5600X 6-Core Processor, 3701 Mhz, 6 Core(s), 12 Logical Processor(s)
+// Graphics Card:   Nvidia 3060 12gb VRAM // Only matters if I ever get around to the GPU-accelerated version I plan on making, so if this is here and I didn't make that then whoops, sorry.
 
-// // If you're interested, a simple way to think of this is like a messaging service.
-// // I allow any number of threads to return a message (in this case containing how many runs it has gone through), and increment the current iteration based on how many messages were received.
-// #[cfg(debug_assertions)]
-// static CHANNEL: (Sender<usize>, Receiver<usize>) = mpsc::channel();
-// This type is guaranteed-aligned (as an atomic) AND is static, and therefore shouldn't (I hope) move around in memory. Thanks to that, we can get a slightly "safer" raw pointer later.
-// static mut CURRENT_ITERATION: OnceLock<Arc<Mutex<AtomicUsize>>> = OnceLock::new();
-// static mut CURRENT_ITERATION_MUTEX: Mutex<AtomicUsize> = Mutex::new(unsafe { CURRENT_ITERATION });
-
-// This, my friends, is a raw pointer... don't use these.
-// static ITERATION_POINTER: *const AtomicUsize = ptr::addr_of!(unsafe{ CURRENT_ITERATION });
 
 fn main() {
     // Fun fact! Since pseudo-random number generation is deterministic--

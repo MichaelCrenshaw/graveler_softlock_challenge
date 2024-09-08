@@ -13,17 +13,25 @@ fastrand = "2.1.1"
 indicatif = "0.17.8"
 num_cpus = "1.16.0"
 
+[dev-dependencies]
+cargo-pgo = "0.2.8"
+
 # todo: consider profile guided optimization? https://doc.rust-lang.org/rustc/profile-guided-optimization.html
 [profile.release]
 opt-level = 3
 lto = "fat"
 panic = "abort"
-# todo: heavily reconsider this lol
 codegen-units = 1
 
 [profile.dev.build-override]
 opt-level = 3
-# todo: heavily reconsider this lol
+debug = false
+split-debuginfo = '...'  # Platform-specific.
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+incremental = false
 codegen-units = 1
+
 
 

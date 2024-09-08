@@ -21,32 +21,6 @@ pub fn naive_main() {
     let mut rolls = 0usize;
     let mut max_ones = 0u64;
 
-    // // Analytics information
-    // let halt_threads = Arc::new(RwLock::new(false));
-
-    // let mut progress_bar;
-    // if cfg!(debug_assertions) {
-    //     progress_bar = ProgressBar::new(ITERATION_COUNT as u64);
-    //
-    //     let ht = halt_threads.clone();
-    //
-    //     // Reporting "coroutine" (not a real one)
-    //     let coro = move || {
-    //         // This, my friends, is a raw pointer... don't use these. (I swear there's a "good" reason I'm using this instead of just passing clones of the progress bar around and incrementing)
-    //         let iteration_pointer: *const usize = unsafe { ptr::addr_of!((*CURRENT_ITERATION.get().unwrap().lock().unwrap().get_mut())) };
-    //         loop {
-    //             if *ht.read().unwrap() {
-    //                 progress_bar.finish_and_clear();
-    //                 break;
-    //             }
-    //
-    //             progress_bar.set_position(unsafe { *iteration_pointer.clone().as_ref().unwrap() as u64 });
-    //         }
-    //     };
-    //
-    //     thread::spawn(coro);
-    // }
-
     while numbers[0] < 177 && rolls < 1_000_000_000 {
         numbers = vec![0, 0, 0, 0];
         for _ in 0..231 {
@@ -57,16 +31,7 @@ pub fn naive_main() {
         if numbers[0] > max_ones {
             max_ones = numbers[0];
         }
-        // if cfg!(debug_assertions) {
-        //     unsafe {
-                // *CURRENT_ITERATION_MUTEX.get_mut().unwrap().get_mut() += 1;
-                // *CURRENT_ITERATION.get().unwrap().get().unwrap().get() += 1;
-                // *CURRENT_ITERATION.get().unwrap().lock().unwrap().get_mut() += 1;
-            // }
-        // }
     }
-
-    // *halt_threads.write().unwrap() = true;
 
     println!("Highest Ones Roll: {max_ones}");
     println!("Number of Roll Sessions: {rolls}");
