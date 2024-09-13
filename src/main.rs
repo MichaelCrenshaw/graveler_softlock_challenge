@@ -8,11 +8,13 @@ use crate::naive::naive_main;
 
 use std::time::{Duration, SystemTime};
 use indicatif::*;
+use crate::gpu::gpu_main;
 use crate::naive_optimized::naive_optimized_main;
 
 mod naive;
 mod analytics;
 mod naive_optimized;
+mod gpu;
 
 // Hyper-params (would be passed through args if I weren't lazy (also constants let the compiler do magic sometimes shh))
 const ITERATION_COUNT: usize = 1_000_000_000;
@@ -40,7 +42,8 @@ fn main() {
     let start_time: SystemTime = SystemTime::now();
 
     // naive_main();
-    naive_optimized_main();
+    // naive_optimized_main();
+    gpu_main();
 
     println!("Time elapsed: {:?}", Duration::from(start_time.elapsed().unwrap()));
 }

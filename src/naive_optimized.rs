@@ -60,34 +60,19 @@ pub fn run_simulations(desired_iterations: usize, reporter: Pin<Arc<Reporter>>) 
     let most_ones_reporter: &mut usize = reporter.write_high_score();
     let wins_reporter: &mut u8 = reporter.write_wins();
 
-    let mut local_iteration = 0usize;
-    let mut local_most_ones = 0usize;
-    let mut local_wins = 0u8;
-
     // It's literally faster to not check if we've won yet... so we don't. Instead, we just report how many wins happened (which will always be 0, obviously)
-    while local_iteration < desired_iterations {
+    while *iteration_reporter < desired_iterations {
         let mut current_ones = 0usize;
         for _ in 0..231 {
             // Fun fact, any optimizer worth its assembler can rationalize this into branchless code
             if fastrand::u8(1..=4) == 1 { current_ones += 1}
         }
         if current_ones == 231 {
-            local_wins += 1
+            *wins_reporter += 1
         }
-        if current_ones > local_most_ones {
-            local_most_ones = current_ones;
+        if current_ones > *most_ones_reporter {
+            *most_ones_reporter = current_ones;
         }
-        local_iteration += 1;
-
-        // Hoping for some excellent loop unraveling here
-        if local_iteration % 100_000 == 0 {
-            *iteration_reporter = local_iteration;
-            *most_ones_reporter = local_most_ones;
-            *wins_reporter = local_wins;
-        }
+        *iteration_reporter += 1;
     }
-
-    *iteration_reporter = local_iteration;
-    *most_ones_reporter = local_most_ones;
-    *wins_reporter = local_wins;
 }
