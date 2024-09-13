@@ -12,16 +12,17 @@ fastrand = "2.1.1"
 # Here for QOL, actually slows down the sim
 indicatif = "0.17.8"
 num_cpus = "1.16.0"
-
-[dev-dependencies]
-cargo-pgo = "0.2.8"
+ocl = "0.19.7"
 
 # todo: consider profile guided optimization? https://doc.rust-lang.org/rustc/profile-guided-optimization.html
 [profile.release]
 opt-level = 3
+debug = false
+strip = "none"
 lto = "fat"
-panic = "abort"
 codegen-units = 1
+incremental = false
+panic = "abort"
 
 [profile.dev.build-override]
 opt-level = 3
